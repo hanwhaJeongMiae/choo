@@ -11,6 +11,8 @@
     임시 저장되어 화면/취합/CSV 가 동작합니다(브라우저별 로컬 저장이라 취합은 단일 PC 기준).
     실제 다인 취합을 위해서는 반드시 백엔드(API_BASE)를 연결하세요.
 -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <div id="app"></div>
 
 <style>
@@ -107,6 +109,16 @@
   .modebar{ font-size:11.5px; color:var(--sub); margin-top:10px; }
   .modebar .on{ color:var(--ok); font-weight:600; }
   .modebar .off{ color:var(--warn); font-weight:600; }
+
+  /* ===== 모바일(작은 화면) 대응 ===== */
+  @media (max-width:480px){
+    #app{ padding:0 12px; }
+    .toolbar{ width:100%; }
+    .toolbar .sm{ flex:1 1 auto; }          /* 새로고침/CSV/잠금 버튼이 줄바꿈되며 터치하기 좋게 */
+    input[type=text],input[type=password],textarea,select{ font-size:16px; } /* iOS 입력 시 자동 확대 방지 */
+    table{ font-size:12px; }
+    th,td{ padding:8px 8px; }
+  }
 </style>
 
 <script>
