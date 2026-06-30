@@ -1,0 +1,415 @@
+<!--
+  Claude 방화벽·DLP 정책예외 신청 - 단말정보 수집 폼 (서버 호스팅용 단일 파일)
+
+  [개발자 안내]
+  - 이 파일은 정적 HTML 한 개로 동작합니다. 웹서버에 그대로 올리면 됩니다.
+  - 데이터 저장은 아래 API_BASE 의 REST 엔드포인트 2개를 사용합니다.
+      POST  {API_BASE}            : 본문(JSON) 1건 저장. 예: { person, dept, empno, pcs:[{ip,host}], ... }
+      GET   {API_BASE}            : 저장된 전체 목록을 JSON 배열로 반환
+    * 키 충돌(동일인 재제출)은 서버에서 person 기준 upsert 권장.
+  - 백엔드가 아직 없으면 API_BASE 를 "" 로 두세요. 이 경우 브라우저 localStorage 에
+    임시 저장되어 화면/취합/CSV 가 동작합니다(브라우저별 로컬 저장이라 취합은 단일 PC 기준).
+    실제 다인 취합을 위해서는 반드시 백엔드(API_BASE)를 연결하세요.
+-->
+<div id="app"></div>
+
+<style>
+  :root{
+    --bg:#f5f5f7; --card:#ffffff; --ink:#1d1d1f; --sub:#6e6e73; --line:#d2d2d7;
+    --accent:#0071e3; --accent-press:#0077ed; --ok:#34c759; --warn:#ff9f0a; --danger:#ff3b30;
+    --radius:18px; --shadow:0 4px 24px rgba(0,0,0,.06);
+  }
+  *{ box-sizing:border-box; }
+  #app{
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Helvetica Neue","Malgun Gothic","Apple SD Gothic Neo",sans-serif;
+    max-width:720px; margin:0 auto; color:var(--ink); line-height:1.5;
+    -webkit-font-smoothing:antialiased; letter-spacing:-0.01em; padding:0 14px;
+  }
+  .card{ background:var(--card); border:0.5px solid var(--line); border-radius:var(--radius); padding:26px 28px; margin-bottom:16px; box-shadow:var(--shadow); }
+  h1{ font-size:26px; font-weight:700; margin:0 0 6px; letter-spacing:-0.02em; }
+  .sub{ color:var(--sub); font-size:14px; margin:0; }
+  h2{ font-size:15px; font-weight:600; margin:0 0 16px; color:var(--ink); display:flex; align-items:center; gap:8px; }
+  h2 .dot{ width:7px; height:7px; border-radius:50%; background:var(--accent); flex:none; }
+  label{ display:block; font-weight:600; font-size:14px; margin:18px 0 7px; }
+  .en{ font-weight:400; color:var(--sub); font-size:12px; }
+  input[type=text],input[type=password],textarea,select{
+    width:100%; padding:12px 14px; border:1px solid var(--line); border-radius:12px;
+    font-size:15px; font-family:inherit; background:#fff; color:var(--ink); transition:.15s;
+  }
+  input:focus,textarea:focus,select:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 4px rgba(0,113,227,.12); }
+  input[readonly]{ background:#f5f5f7; color:var(--sub); cursor:default; }
+  .hint{ color:var(--sub); font-size:12px; margin-top:5px; }
+  .code{ font-family:"SF Mono",Menlo,Consolas,monospace; background:#f5f5f7; border-radius:6px; padding:1px 7px; font-size:13px; color:var(--accent); }
+  .infobox{ background:rgba(0,113,227,.05); border:1px solid rgba(0,113,227,.18); border-radius:14px; padding:15px 17px; font-size:13.5px; color:var(--ink); margin-top:6px; }
+  .infobox b{ font-weight:600; }
+  .infobox .step{ display:flex; gap:9px; align-items:flex-start; margin-top:9px; }
+  .infobox .step:first-child{ margin-top:0; }
+  .infobox .num{ flex:none; width:19px; height:19px; border-radius:50%; background:var(--accent); color:#fff; font-size:11.5px; font-weight:600; display:flex; align-items:center; justify-content:center; margin-top:1px; }
+  .pcblock{ border:1px solid var(--line); border-radius:14px; padding:18px 20px 6px; margin-top:12px; position:relative; }
+  .pcblock .pchead{ display:flex; justify-content:space-between; align-items:center; }
+  .pcblock .pctitle{ font-size:13.5px; font-weight:600; color:var(--accent); }
+  .delpc{ background:transparent; border:0; color:var(--danger); font-size:12.5px; font-weight:600; cursor:pointer; padding:4px 6px; }
+  .delpc:hover{ text-decoration:underline; }
+  .addpc{ background:#e8e8ed; color:var(--accent); border-radius:980px; padding:10px 18px; font-size:13.5px; font-weight:600; cursor:pointer; border:0; margin-top:12px; }
+  .addpc:hover{ background:#dcdce1; }
+  button{ background:var(--accent); color:#fff; border:0; border-radius:980px; padding:13px 26px;
+    font-size:15px; font-weight:600; cursor:pointer; font-family:inherit; transition:.15s; letter-spacing:-0.01em; }
+  button:hover{ background:var(--accent-press); transform:translateY(-1px); }
+  button:active{ transform:translateY(0); }
+  button.ghost{ background:#e8e8ed; color:var(--ink); }
+  button.ghost:hover{ background:#dcdce1; }
+  button.sm{ padding:8px 16px; font-size:13px; }
+  .tabbar{ display:inline-flex; gap:4px; margin:14px 0 18px; background:#e8e8ed; padding:4px; border-radius:980px; }
+  .tabbar button{ background:transparent; color:var(--sub); font-size:14px; padding:8px 20px; font-weight:500; }
+  .tabbar button.active{ background:#fff; color:var(--ink); box-shadow:0 1px 3px rgba(0,0,0,.1); }
+  .thanks{ text-align:center; padding:44px 28px; }
+  .thanks h1{ font-size:25px; }
+  .check-anim{ display:inline-block; }
+  .c-circle{ stroke-dasharray:233; stroke-dashoffset:233; animation:draw .6s ease forwards; }
+  .c-check{ stroke-dasharray:60; stroke-dashoffset:60; animation:draw .4s .5s ease forwards; }
+  @keyframes draw{ to{ stroke-dashoffset:0; } }
+  .thanks-meta{ max-width:380px; margin:22px auto 0; border:1px solid var(--line); border-radius:14px; overflow:hidden; text-align:left; }
+  .tm-row{ display:flex; justify-content:space-between; gap:12px; padding:12px 16px; font-size:14px; }
+  .tm-row + .tm-row{ border-top:1px solid #ededf0; }
+  .tm-row span{ color:var(--sub); }
+  .tm-row strong{ font-weight:600; text-align:right; }
+  .muted{ color:var(--sub); font-size:13px; }
+  .topbar{ display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:6px; }
+  .pill{ display:inline-block; background:rgba(0,113,227,.1); color:var(--accent); border-radius:980px; padding:4px 13px; font-size:12.5px; font-weight:600; }
+  .err{ color:var(--danger); font-size:13px; margin-top:8px; }
+  .loading{ text-align:center; color:var(--sub); padding:40px; }
+  .statgrid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:18px 0 8px; }
+  .stat{ border:1px solid var(--line); border-radius:14px; padding:16px 18px; }
+  .stat .n{ font-size:30px; font-weight:700; letter-spacing:-0.02em; }
+  .stat .l{ font-size:12.5px; color:var(--sub); margin-top:2px; }
+  .stat.green .n{ color:var(--ok); } .stat.amber .n{ color:var(--warn); }
+  .plist{ display:flex; flex-direction:column; gap:1px; margin-top:6px; border:1px solid var(--line); border-radius:14px; overflow:hidden; }
+  .prow{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px 16px; background:#fff; }
+  .prow + .prow{ border-top:1px solid #ededf0; }
+  .prow .who{ display:flex; flex-direction:column; min-width:0; }
+  .prow .nm{ font-size:14.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .prow .tm{ font-size:12px; color:var(--sub); }
+  .badge{ font-size:11.5px; font-weight:600; padding:4px 10px; border-radius:980px; white-space:nowrap; }
+  .badge.done{ background:rgba(52,199,89,.12); color:#1c7a3e; }
+  .badge.miss{ background:rgba(255,59,48,.1); color:var(--danger); }
+  .rowbtns{ display:flex; gap:8px; align-items:center; flex:none; }
+  .lock{ max-width:380px; margin:40px auto; text-align:center; }
+  .lock .ic{ font-size:40px; margin-bottom:8px; }
+  table{ width:100%; border-collapse:collapse; font-size:12.5px; margin-top:14px; }
+  th,td{ border-bottom:1px solid var(--line); padding:10px 10px; text-align:left; vertical-align:top; white-space:nowrap; }
+  th{ font-weight:600; color:var(--sub); font-size:11.5px; text-transform:uppercase; letter-spacing:.03em; }
+  .toolbar{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .modebar{ font-size:11.5px; color:var(--sub); margin-top:10px; }
+  .modebar .on{ color:var(--ok); font-weight:600; }
+  .modebar .off{ color:var(--warn); font-weight:600; }
+</style>
+
+<script>
+/* ===================== 설정 ===================== */
+const ADMIN_PW   = "28022802";                 // 어드민 비밀번호
+const API_BASE   = "";                          // ← 백엔드 REST 주소. 비우면 localStorage 임시저장.
+const REQ_PERIOD = "2026-07";
+const FW_URLS    = "https://downloads.claude.ai/, https://claude.ai/";
+/* ================================================ */
+
+// team | name | role | email
+const ROSTER = [
+  ["\uc194\ub8e8\uc158\uc0c1\ud488\uae30\ud68d\ub2f4\ub2f9","Ethan Kim","PD","ethan.kim@hanwha.com"],
+  ["SW PM1\ud300","\uae40\uac74\uc6b1 (Gunuk Kim)","\ubd80\uc7a5","gunuk.kim@hanwha.com"],
+  ["SW PM1\ud300","\ubc15\uc138\uc601 (Seyoung Park)","\uacfc\uc7a5","seyu.park@hanwha.com"],
+  ["SW PM1\ud300","\uae40\uc601\ud654 (Younghwa Kim)","\uacfc\uc7a5","yh808.kim@hanwha.com"],
+  ["SW PM2\ud300","\uc624\uc2b9\uc5f4 (Kenneth Seungyeal Oh)","\ubd80\uc7a5","sy.oh@hanwha.com"],
+  ["SW PM2\ud300","\uc7a5\uad11\ud6c8 (Gwangwhoon Jang)","\ubd80\uc7a5","choco71.jang@hanwha.com"],
+  ["SW PM2\ud300","\uae40\uc0c1\ud6c8 (SangHoon Kim)","\ucc28\uc7a5","k.sanghoon@hanwha.com"],
+  ["SW PM2\ud300","\uc7a5\ubbfc\uacbd (Minkyoung Jang)","\uacfc\uc7a5","mk.jang@hanwha.com"],
+  ["UX\ub514\uc790\uc7781\ud300","\uc774\ud638\uc815 (Hojung Lee / Jennie)","\uc218\uc11d","hjen.lee@hanwha.com"],
+  ["UX\ub514\uc790\uc7781\ud300","\ucd94\uc9c4\uc6b0 (Steve Choo)","\uc218\uc11d","jinwoo.choo@hanwha.com"],
+  ["UX\ub514\uc790\uc7781\ud300","\uae40\uc5f0\uc6b0 (Yeonwoo Kim / Chloe)","\ucc45\uc784","yeon1217.kim@hanwha.com"],
+  ["UX\ub514\uc790\uc7781\ud300","\uc774\uc0c1\uc724 (Sangyun Lee / Justin)","\ucc45\uc784","sangyun.lee@hanwha.com"],
+  ["UX\ub514\uc790\uc7781\ud300","\uae40\ub3d9\uc6d0 (Kristen Kim)","\uc120\uc784","dongwon.k@hanwha.com"],
+  ["UX\ub514\uc790\uc7781\ud300","\ucd5c\ud6c8\uc11d (Hun)","\uc5f0\uad6c\uc6d0","chsgj0330@hanwha.com"],
+  ["SW PM3\ud300","Jonathan Farmer","PD","j.farmer@hanwha.com"],
+  ["SW PM3\ud300","Elijah Blanton","PR","elijah.b@hanwha.com"],
+  ["SW PM3\ud300","Sylvia Benavidez","PR","sylvia.b@hanwha.com"],
+  ["UX\ub514\uc790\uc7782\ud300","Aleksandr Patc","PR","a.patc@hanwha.com"],
+  ["UX\ub514\uc790\uc7782\ud300","Nara Han","PR","nara.han@hanwha.com"],
+  ["UX\ub514\uc790\uc7782\ud300","Yanling Zhang","PA","yanling.z@hanwha.com"],
+  ["Cloud SaaS PM\ud300","Pat Collins","PD","p.collins@hanwha.com"],
+  ["Cloud SaaS PM\ud300","Chris Wilson","PR","c.wilson@hanwha.com"],
+  ["Cloud SaaS PM\ud300","Baer Halvorson","PE","b.halvorson@hanwha.com"],
+  ["Cloud SaaS PM\ud300","William Vallera","PA","w.vallera@hanwha.com"],
+  ["Cloud SaaS PM\ud300","Hoda Ahmad","PA","h.ahmad@hanwha.com"]
+];
+const PEOPLE = ROSTER.map(function(r){ return r[1]; });
+function teamOf(n){ const r=ROSTER.find(function(x){return x[1]===n;}); return r?r[0]:""; }
+function roleOf(n){ const r=ROSTER.find(function(x){return x[1]===n;}); return r?r[2]:""; }
+function emailOf(n){ const r=ROSTER.find(function(x){return x[1]===n;}); return r?r[3]:""; }
+
+function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function sleep(ms){ return new Promise(function(r){ setTimeout(r,ms); }); }
+
+/* ============ 저장소 추상화 (백엔드 or localStorage) ============ */
+const USING_BACKEND = !!(API_BASE && API_BASE.trim());
+const LS_KEY = "claude_fwdlp_submissions";
+
+async function storeSubmit(rec){
+  if(USING_BACKEND){
+    const res = await fetch(API_BASE, {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body:JSON.stringify(rec)
+    });
+    if(!res.ok) throw new Error("server "+res.status);
+    return true;
+  } else {
+    const all = lsLoad();
+    const i = all.findIndex(function(x){ return x.person===rec.person; });
+    if(i>=0) all[i]=rec; else all.push(rec);
+    localStorage.setItem(LS_KEY, JSON.stringify(all));
+    return true;
+  }
+}
+async function storeLoadAll(){
+  if(USING_BACKEND){
+    const res = await fetch(API_BASE, { method:"GET" });
+    if(!res.ok) throw new Error("server "+res.status);
+    const data = await res.json();
+    return Array.isArray(data) ? data : (data.items||data.rows||[]);
+  } else {
+    return lsLoad();
+  }
+}
+function lsLoad(){
+  try{ const s=localStorage.getItem(LS_KEY); return s?JSON.parse(s):[]; }catch(e){ return []; }
+}
+/* ============================================================== */
+
+function blankPc(){ return { ip:"", host:"" }; }
+function blankForm(){ return { person:"", dept:"", empno:"", pcs:[ blankPc() ] }; }
+const state={ tab:"form", form:blankForm(), done:false, submitting:false, err:"",
+  rows:null, authed:false, pw:"", pwErr:"", lastDone:null };
+const app=document.getElementById("app");
+
+function render(){
+  let h='<div class="tabbar">'
+    +'<button class="'+(state.tab==="form"?"active":"")+'" onclick="setTab(\'form\')">\uc785\ub825 Submit</button>'
+    +'<button class="'+(state.tab==="admin"?"active":"")+'" onclick="setTab(\'admin\')">\uad00\ub9ac\uc790 Admin</button>'
+    +'</div>';
+  h += state.tab==="form" ? formHtml() : adminHtml();
+  app.innerHTML=h;
+  if(state.tab==="admin" && state.authed && state.rows===null) loadRows();
+}
+
+function formHtml(){
+  if(state.done){
+    const d=state.lastDone||{};
+    return '<div class="card thanks">'
+      +'<div class="check-anim"><svg viewBox="0 0 80 80" width="80" height="80"><circle cx="40" cy="40" r="37" fill="none" stroke="#34c759" stroke-width="4" class="c-circle"/><path d="M24 41 L36 53 L57 29" fill="none" stroke="#34c759" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" class="c-check"/></svg></div>'
+      +'<h1 style="margin-top:8px">\uc81c\ucd9c\uc774 \uc644\ub8cc\ub418\uc5c8\uc2b5\ub2c8\ub2e4</h1>'
+      +'<p class="sub" style="font-size:15px">Thank you. Your device info has been submitted.</p>'
+      +'<div class="thanks-meta">'
+        +'<div class="tm-row"><span>\uc131\uba85 Name</span><strong>'+esc(d.person)+'</strong></div>'
+        +'<div class="tm-row"><span>\ubd80\uc11c Dept</span><strong>'+esc(d.dept)+'</strong></div>'
+        +'<div class="tm-row"><span>\ub2e8\ub9d0 \uc218 PCs</span><strong>'+(d.pcs?d.pcs.length:0)+'\ub300</strong></div>'
+        +'<div class="tm-row"><span>\uc81c\ucd9c\uc2dc\uac01 Time</span><strong>'+new Date().toLocaleString("ko-KR")+'</strong></div>'
+      +'</div>'
+      +'<p class="muted" style="margin-top:18px">\ubc29\ud654\ubcbd\u00b7DLP \uc815\ucc45\uc608\uc678 \uc2e0\uccad\uc5d0 \ud611\uc870\ud574 \uc8fc\uc154\uc11c \uac10\uc0ac\ud569\ub2c8\ub2e4. \ucc3d\uc744 \ub2eb\uc73c\uc154\ub3c4 \ub429\ub2c8\ub2e4.<br><span class="en">You may now close this window.</span></p>'
+      +'<div style="margin-top:18px"><button class="ghost" onclick="resetForm()">\ub2e4\ub978 \ub300\uc0c1\uc790 \uc785\ub825 Submit another</button></div>'
+      +'</div>';
+  }
+  let opts='<option value="">\u2014 \uc120\ud0dd Select \u2014</option>';
+  ROSTER.forEach(function(r){ const n=r[1]; opts+='<option value="'+esc(n)+'"'+(state.form.person===n?" selected":"")+'>'+esc(r[0]+" \u00b7 "+n+" "+r[2])+'</option>'; });
+
+  let h='';
+  h+='<div class="card"><h1>Claude \ubc29\ud654\ubcbd\u00b7DLP \uc815\ucc45\uc608\uc678 \uc2e0\uccad</h1>'
+    +'<p class="sub">\uc544\ub798 \ub2e8\ub9d0 \uc815\ubcf4\ub97c \uc785\ub825 \ud6c4 \uc81c\ucd9c\ud574\uc8fc\uc138\uc694 / Submit your device info below.</p>'
+    +'<div class="infobox" style="margin-top:16px">'
+      +'<b>\uc2e0\uccad \ub0b4\uc6a9 / Request</b><br>'
+      +'\u00b7 DLP \uc608\uc678: claude.exe \uc2e4\ud589 \ucc28\ub2e8 \ud574\uc81c<br>'
+      +'\u00b7 \ubc29\ud654\ubcbd \ud574\uc81c: '+esc(FW_URLS)+'<br>'
+      +'\u00b7 \uc2e0\uccad\uae30\uac04: \ucd5c\ub300 3\uac1c\uc6d4'
+    +'</div></div>';
+
+  h+='<div class="card"><h2><span class="dot"></span>\uc2e0\uccad\uc790 \uc815\ubcf4 Applicant</h2>'
+    +'<label>\uc131\uba85 <span class="en">Name</span></label>'
+    +'<select onchange="onPerson(this.value)">'+opts+'</select>'
+    +'<label>\ubd80\uc11c <span class="en">Department</span></label>'
+    +'<input type="text" value="'+esc(state.form.dept)+'" oninput="setVal(\'dept\',this.value)" placeholder="\uc608: UX\ub514\uc790\uc7781\ud300">'
+    +'<label>\uc0ac\ubc88 <span class="en">Employee No.</span></label>'
+    +'<input type="text" value="'+esc(state.form.empno)+'" oninput="setVal(\'empno\',this.value)" placeholder="\uc608: 12345678">'
+    +'</div>';
+
+  h+='<div class="card"><h2><span class="dot"></span>\ub2e8\ub9d0 \uc815\ubcf4 Device(s)</h2>'
+    +'<div class="infobox">'
+      +'<b>\ud655\uc778 \ubc29\ubc95 / How to find</b>'
+      +'<div class="step"><span class="num">1</span><div>\uc708\ub3c4\uc6b0 \uac80\uc0c9\ucc3d\uc5d0 <span class="code">cmd</span> \uc785\ub825 \u2192 \uba85\ub839 \ud504\ub86c\ud504\ud2b8 \uc2e4\ud589</div></div>'
+      +'<div class="step"><span class="num">2</span><div><span class="code">ipconfig</span> \uc785\ub825 \u2192 <b>IPv4 \uc8fc\uc18c</b> \ud655\uc778 (\uc608: 10.x.x.x)</div></div>'
+      +'<div class="step"><span class="num">3</span><div><span class="code">hostname</span> \uc785\ub825 \u2192 <b>PC Hostname</b> \ud655\uc778</div></div>'
+    +'</div>';
+
+  state.form.pcs.forEach(function(pc,idx){
+    h+='<div class="pcblock"><div class="pchead"><span class="pctitle">PC '+(idx+1)+'</span>'
+      +(state.form.pcs.length>1?'<button class="delpc" onclick="delPc('+idx+')">\u2715 \uc0ad\uc81c</button>':'')+'</div>'
+      +'<label>IP\uc8fc\uc18c <span class="en">IPv4 Address</span></label>'
+      +'<input type="text" value="'+esc(pc.ip)+'" oninput="setPc('+idx+',\'ip\',this.value)" placeholder="\uc608: 10.12.34.56">'
+      +'<label>PC Hostname</label>'
+      +'<input type="text" value="'+esc(pc.host)+'" oninput="setPc('+idx+',\'host\',this.value)" placeholder="\uc608: HW-PC-1234">'
+      +'</div>';
+  });
+  h+='<button class="addpc" onclick="addPc()">+ PC \ucd94\uac00 (\uc5ec\ub7ec \ub300 \uc0ac\uc6a9 \uc2dc) Add PC</button>'
+    +'<p class="hint" style="margin-top:12px">PC\ub97c \uc5ec\ub7ec \ub300 \uc0ac\uc6a9\ud558\uc2dc\ub294 \uacbd\uc6b0 \ub2e8\ub9d0\ubcc4\ub85c \ubaa8\ub450 \ucd94\uac00\ud574 \uc8fc\uc138\uc694.</p>'
+    +'</div>';
+
+  h+='<div class="card">'
+    +(state.err?'<div class="err">'+esc(state.err)+'</div>':'')
+    +'<div style="margin-top:4px"><button onclick="submitForm()" '+(state.submitting?'disabled style="opacity:.6;cursor:wait"':'')+'>'+(state.submitting?"\uc81c\ucd9c \uc911\u2026 Submitting":"\uc81c\ucd9c\ud558\uae30 Submit")+'</button></div></div>';
+  return h;
+}
+
+function adminHtml(){
+  if(!state.authed){
+    return '<div class="card"><div class="lock"><div class="ic">\uD83D\uDD12</div>'
+      +'<h2 style="justify-content:center">\uad00\ub9ac\uc790 \uc804\uc6a9 Admin only</h2>'
+      +'<p class="muted" style="margin-bottom:16px">\ube44\ubc00\ubc88\ud638\ub97c \uc785\ub825\ud558\uc138\uc694 / Enter password</p>'
+      +'<input type="password" id="pwin" value="'+esc(state.pw)+'" oninput="onPw(this.value)" onkeydown="if(event.key===\'Enter\')tryAuth()" placeholder="Password" style="text-align:center; letter-spacing:.2em">'
+      +(state.pwErr?'<div class="err">'+esc(state.pwErr)+'</div>':'')
+      +'<div style="margin-top:16px"><button onclick="tryAuth()">\uc811\uc18d Unlock</button></div>'
+      +'</div></div>';
+  }
+
+  const rows=state.rows||[];
+  const submitted = PEOPLE.filter(function(p){ return rows.some(function(r){return r.person===p;}); });
+  const missing = PEOPLE.filter(function(p){ return !rows.some(function(r){return r.person===p;}); });
+
+  let h='<div class="card"><div class="topbar"><div>'
+    +'<h1 style="font-size:21px">\uc2e0\uccad \ud604\ud669 Dashboard</h1>'
+    +'<span class="pill">\ubc29\ud654\ubcbd\u00b7DLP \uc815\ucc45\uc608\uc678</span></div>'
+    +'<div class="toolbar">'
+    +'<button class="ghost sm" onclick="loadRows()">\uc0c8\ub85c\uace0\uce68</button>'
+    +'<button class="sm" onclick="exportCsv()">CSV \ub2e4\uc6b4\ub85c\ub4dc</button>'
+    +'<button class="ghost sm" onclick="logout()">\uc7a0\uae08 Lock</button>'
+    +'</div></div>'
+    +'<div class="modebar">\uc800\uc7a5 \ubaa8\ub4dc: '+(USING_BACKEND
+        ?'<span class="on">\uc11c\ubc84 \uc5f0\ub3d9(\uacf5\uc720 \ucde8\ud569)</span>'
+        :'<span class="off">\uc784\uc2dc \uc800\uc7a5(\ube0c\ub77c\uc6b0\uc800 \ub85c\uceec)</span> \u2014 \ub2e4\uc778 \ucde8\ud569\uc744 \uc704\ud574 \ubc31\uc5d4\ub4dc(API_BASE) \uc5f0\uacb0 \ud544\uc694')+'</div>';
+
+  if(state.rows===null){ h+='<div class="loading">\ubd88\ub7ec\uc624\ub294 \uc911\u2026</div></div>'; return h; }
+
+  h+='<div class="statgrid">'
+    +'<div class="stat green"><div class="n">'+submitted.length+'</div><div class="l">\uc81c\ucd9c \uc644\ub8cc Submitted</div></div>'
+    +'<div class="stat amber"><div class="n">'+missing.length+'</div><div class="l">\ubbf8\uc81c\ucd9c Not yet</div></div>'
+    +'</div>';
+
+  if(missing.length){
+    h+='<h2 style="margin-top:22px"><span class="dot" style="background:var(--danger)"></span>\ubbf8\uc81c\ucd9c\uc790 Not submitted ('+missing.length+')</h2><div class="plist">';
+    missing.forEach(function(n){
+      h+='<div class="prow"><div class="who"><span class="nm">'+esc(n)+'</span><span class="tm">'+esc(teamOf(n)+" \u00b7 "+roleOf(n))+'</span></div>'
+        +'<div class="rowbtns"><span class="badge miss">\ubbf8\uc81c\ucd9c</span></div></div>';
+    });
+    h+='</div>';
+  }
+
+  if(submitted.length){
+    h+='<h2 style="margin-top:22px"><span class="dot" style="background:var(--ok)"></span>\uc81c\ucd9c\uc790 Submitted ('+submitted.length+')</h2><div class="plist">';
+    submitted.forEach(function(n){
+      const r=rows.find(function(x){return x.person===n;});
+      const t=(r&&r.submittedAt||"").slice(5,16).replace("T"," ");
+      const npc=(r&&r.pcs)?r.pcs.length:0;
+      h+='<div class="prow"><div class="who"><span class="nm">'+esc(n)+'</span><span class="tm">'+esc(teamOf(n))+' \u00b7 '+npc+'\ub300</span></div>'
+        +'<div class="rowbtns"><span class="muted">'+esc(t)+'</span><span class="badge done">\u2713 \uc81c\ucd9c</span></div></div>';
+    });
+    h+='</div>';
+  }
+
+  if(rows.length){
+    h+='<h2 style="margin-top:24px"><span class="dot"></span>\uc0c1\uc138 \ub0b4\uc5ed Details (\uc2e0\uccad\uc11c \ucca8\ubd80\uc6a9)</h2>'
+      +'<div style="overflow-x:auto"><table><thead><tr>'
+      +'<th>\ubd80\uc11c</th><th>\uc131\uba85</th><th>IP\uc8fc\uc18c</th><th>PC Hostname</th><th>\uc0ac\ubc88</th>'
+      +'</tr></thead><tbody>';
+    rows.forEach(function(r){
+      const pcs=(r.pcs&&r.pcs.length)?r.pcs:[{ip:"",host:""}];
+      pcs.forEach(function(pc,i){
+        h+='<tr><td>'+esc(i===0?(r.dept||teamOf(r.person)):"")+'</td><td><strong>'+esc(i===0?r.person:"")+'</strong></td>'
+          +'<td>'+esc(pc.ip)+'</td><td>'+esc(pc.host)+'</td><td>'+esc(i===0?r.empno:"")+'</td></tr>';
+      });
+    });
+    h+='</tbody></table></div>'
+      +'<p class="hint">\u203b CSV \ub2e4\uc6b4\ub85c\ub4dc \ud6c4 \uc2e0\uccad\uc11c \uc591\uc2dd(\ubd80\uc11c/\uc131\uba85/IP\uc8fc\uc18c/PC Hostname/\uc0ac\ubc88)\uc5d0 \ubd99\uc5ec\ub123\uc73c\uc138\uc694.</p>';
+  }
+  h+='</div>';
+  return h;
+}
+
+window.setTab=function(t){ state.tab=t; if(t==="admin"&&state.authed){state.rows=null;} render(); };
+window.onPerson=function(v){
+  state.form.person=v;
+  if(v){ const t=teamOf(v); if(!state.form.dept) state.form.dept=t; }
+  render();
+};
+window.setVal=function(k,v){ state.form[k]=v; };
+window.setPc=function(idx,k,v){ if(state.form.pcs[idx]) state.form.pcs[idx][k]=v; };
+window.addPc=function(){ state.form.pcs.push(blankPc()); render(); };
+window.delPc=function(idx){ state.form.pcs.splice(idx,1); if(!state.form.pcs.length) state.form.pcs.push(blankPc()); render(); };
+window.resetForm=function(){ state.done=false; state.form=blankForm(); state.err=""; render(); };
+window.onPw=function(v){ state.pw=v; };
+window.tryAuth=function(){ if(state.pw===ADMIN_PW){ state.authed=true; state.pw=""; state.pwErr=""; state.rows=null; render(); } else { state.pwErr="\ube44\ubc00\ubc88\ud638\uac00 \uc62c\ubc14\ub974\uc9c0 \uc54a\uc2b5\ub2c8\ub2e4 / Incorrect password."; render(); } };
+window.logout=function(){ state.authed=false; state.rows=null; render(); };
+
+window.submitForm=async function(){
+  if(state.submitting) return;
+  const f=state.form;
+  if(!f.person){ state.err="\uc131\uba85\uc744 \uc120\ud0dd\ud574\uc8fc\uc138\uc694 / Please select your name."; render(); return; }
+  if(!f.dept){ state.err="\ubd80\uc11c\ub97c \uc785\ub825\ud574\uc8fc\uc138\uc694 / Please enter your department."; render(); return; }
+  if(!f.empno){ state.err="\uc0ac\ubc88\uc744 \uc785\ub825\ud574\uc8fc\uc138\uc694 / Please enter your employee number."; render(); return; }
+  const validPcs=f.pcs.filter(function(p){ return (p.ip&&p.ip.trim())||(p.host&&p.host.trim()); });
+  if(!validPcs.length){ state.err="\ucd5c\uc18c 1\ub300\uc758 IP\uc8fc\uc18c\uc640 PC Hostname\uc744 \uc785\ub825\ud574\uc8fc\uc138\uc694 / Enter at least one device."; render(); return; }
+  for(let i=0;i<validPcs.length;i++){
+    if(!validPcs[i].ip||!validPcs[i].ip.trim()){ state.err="PC \uc815\ubcf4\uc758 IP\uc8fc\uc18c\ub97c \ubaa8\ub450 \uc785\ub825\ud574\uc8fc\uc138\uc694 / IP address required for each PC."; render(); return; }
+    if(!validPcs[i].host||!validPcs[i].host.trim()){ state.err="PC \uc815\ubcf4\uc758 Hostname\uc744 \ubaa8\ub450 \uc785\ub825\ud574\uc8fc\uc138\uc694 / Hostname required for each PC."; render(); return; }
+  }
+
+  state.err=""; state.submitting=true; render();
+  const rec={ person:f.person, email:emailOf(f.person), dept:f.dept, empno:f.empno, pcs:validPcs,
+    period:REQ_PERIOD, fwUrls:FW_URLS, submittedAt:new Date().toISOString() };
+  try{
+    await storeSubmit(rec);
+    state.submitting=false; state.done=true; state.lastDone=rec; render();
+  }catch(e){
+    state.submitting=false;
+    state.err="\uc81c\ucd9c \uc911 \uc624\ub958\uac00 \ubc1c\uc0dd\ud588\uc2b5\ub2c8\ub2e4. \uc7a0\uc2dc \ud6c4 \ub2e4\uc2dc \uc2dc\ub3c4\ud574 \uc8fc\uc138\uc694 / Submit error. Please try again.";
+    render();
+  }
+};
+
+window.loadRows=async function(){
+  state.rows=null; render();
+  let out=[];
+  try{
+    const data = await storeLoadAll();
+    const seen={};
+    (data||[]).forEach(function(obj){
+      if(obj && obj.person && !seen[obj.person]){ seen[obj.person]=1; out.push(obj); }
+    });
+  }catch(e){ out=[]; }
+  out.sort(function(a,b){ return String(a.person).localeCompare(String(b.person)); });
+  state.rows=out; render();
+};
+
+window.exportCsv=function(){
+  const rows=state.rows||[]; if(!rows.length){ alert("\ub2e4\uc6b4\ub85c\ub4dc\ud560 \uc81c\ucd9c \ub0b4\uc5ed\uc774 \uc5c6\uc2b5\ub2c8\ub2e4."); return; }
+  const head=["\ubd80\uc11c","\uc131\uba85","\uc9c1\uae09","\uc774\uba54\uc77c","\uc0ac\ubc88","IP\uc8fc\uc18c","PC Hostname","\uc81c\ucd9c\uc2dc\uac01"].join(",");
+  const lines=[];
+  rows.forEach(function(r){
+    const pcs=(r.pcs&&r.pcs.length)?r.pcs:[{ip:"",host:""}];
+    pcs.forEach(function(pc){
+      const vals=[ r.dept||teamOf(r.person), r.person, roleOf(r.person), emailOf(r.person), r.empno||"", pc.ip||"", pc.host||"", r.submittedAt||"" ];
+      lines.push(vals.map(function(v){ return '"'+String(v||"").replace(/"/g,'""')+'"'; }).join(","));
+    });
+  });
+  const blob=new Blob(["\uFEFF"+head+"\n"+lines.join("\n")],{type:"text/csv;charset=utf-8;"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a"); a.href=url; a.download="Claude_\ubc29\ud654\ubcbdDLP_\ub2e8\ub9d0\uc815\ubcf4_"+REQ_PERIOD+".csv"; a.click();
+};
+
+render();
+</script>
