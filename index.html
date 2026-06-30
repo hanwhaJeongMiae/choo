@@ -52,6 +52,11 @@
   .delpc:hover{ text-decoration:underline; }
   .addpc{ background:#e8e8ed; color:var(--accent); border-radius:980px; padding:10px 18px; font-size:13.5px; font-weight:600; cursor:pointer; border:0; margin-top:12px; }
   .addpc:hover{ background:#dcdce1; }
+  .connseg{ display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; }
+  .connopt{ background:#fff; color:var(--ink); border:1px solid var(--line); border-radius:980px; padding:9px 18px; font-size:14px; font-weight:500; cursor:pointer; transition:.15s; }
+  .connopt:hover{ background:#f5f5f7; transform:none; }
+  .connopt.sel{ background:var(--accent); color:#fff; border-color:var(--accent); }
+  .connopt.sel:hover{ background:var(--accent-press); }
   button{ background:var(--accent); color:#fff; border:0; border-radius:980px; padding:13px 26px;
     font-size:15px; font-weight:600; cursor:pointer; font-family:inherit; transition:.15s; letter-spacing:-0.01em; }
   button:hover{ background:var(--accent-press); transform:translateY(-1px); }
@@ -184,7 +189,8 @@ function lsLoad(){
 }
 /* ============================================================== */
 
-function blankPc(){ return { ip:"", host:"" }; }
+function blankPc(){ return { conn:"", ipWired:"", ipWireless:"", host:"" }; }
+const CONN_OPTS = ["\uc720\uc120\ub9cc","\ubb34\uc120\ub9cc","\ub458 \ub2e4"];
 function blankForm(){ return { person:"", dept:"", empno:"", pcs:[ blankPc() ] }; }
 const state={ tab:"form", form:blankForm(), done:false, submitting:false, err:"",
   rows:null, authed:false, pw:"", pwErr:"", lastDone:null };
@@ -243,18 +249,33 @@ function formHtml(){
     +'<div class="infobox">'
       +'<b>\ud655\uc778 \ubc29\ubc95 / How to find</b>'
       +'<div class="step"><span class="num">1</span><div>\uc708\ub3c4\uc6b0 \uac80\uc0c9\ucc3d\uc5d0 <span class="code">cmd</span> \uc785\ub825 \u2192 \uba85\ub839 \ud504\ub86c\ud504\ud2b8 \uc2e4\ud589</div></div>'
-      +'<div class="step"><span class="num">2</span><div><span class="code">ipconfig</span> \uc785\ub825 \u2192 <b>IPv4 \uc8fc\uc18c</b> \ud655\uc778 (\uc608: 10.x.x.x)</div></div>'
+      +'<div class="step"><span class="num">2</span><div><span class="code">ipconfig</span> \uc785\ub825 \u2192 <b>\uc774\ub354\ub137 \uc5b4\ub311\ud130</b>\uc758 IPv4 = <b>\uc720\uc120</b>, <b>\ubb34\uc120 LAN \uc5b4\ub311\ud130</b>\uc758 IPv4 = <b>\ubb34\uc120</b> (\uc608: 10.x.x.x)</div></div>'
       +'<div class="step"><span class="num">3</span><div><span class="code">hostname</span> \uc785\ub825 \u2192 <b>PC Hostname</b> \ud655\uc778</div></div>'
     +'</div>';
 
   state.form.pcs.forEach(function(pc,idx){
     h+='<div class="pcblock"><div class="pchead"><span class="pctitle">PC '+(idx+1)+'</span>'
       +(state.form.pcs.length>1?'<button class="delpc" onclick="delPc('+idx+')">\u2715 \uc0ad\uc81c</button>':'')+'</div>'
-      +'<label>IP\uc8fc\uc18c <span class="en">IPv4 Address</span></label>'
-      +'<input type="text" value="'+esc(pc.ip)+'" oninput="setPc('+idx+',\'ip\',this.value)" placeholder="\uc608: 10.12.34.56">'
-      +'<label>PC Hostname</label>'
-      +'<input type="text" value="'+esc(pc.host)+'" oninput="setPc('+idx+',\'host\',this.value)" placeholder="\uc608: HW-PC-1234">'
-      +'</div>';
+      +'<label>\uc5f0\uacb0 \ubc29\uc2dd <span class="en">Connection type</span></label>'
+      +'<div class="connseg">';
+    CONN_OPTS.forEach(function(o){
+      h+='<button type="button" class="connopt'+(pc.conn===o?' sel':'')+'" onclick="setConn('+idx+',\''+esc(o)+'\')">'+o+'</button>';
+    });
+    h+='</div>';
+    if(pc.conn==="\uc720\uc120\ub9cc"||pc.conn==="\ub458 \ub2e4"){
+      h+='<label>\uc774\ub354\ub137 \uc5b4\ub311\ud130 IPv4 <span class="en">Ethernet (\uc720\uc120)</span></label>'
+        +'<input type="text" value="'+esc(pc.ipWired)+'" oninput="setPc('+idx+',\'ipWired\',this.value)" placeholder="\uc608: 10.12.34.56">';
+    }
+    if(pc.conn==="\ubb34\uc120\ub9cc"||pc.conn==="\ub458 \ub2e4"){
+      h+='<label>\ubb34\uc120 LAN \uc5b4\ub311\ud130 IPv4 <span class="en">Wireless (\ubb34\uc120)</span></label>'
+        +'<input type="text" value="'+esc(pc.ipWireless)+'" oninput="setPc('+idx+',\'ipWireless\',this.value)" placeholder="\uc608: 10.12.34.78">';
+    }
+    h+='<label>PC Hostname</label>'
+      +'<input type="text" value="'+esc(pc.host)+'" oninput="setPc('+idx+',\'host\',this.value)" placeholder="\uc608: HW-PC-1234">';
+    if(pc.conn){
+      h+='<p class="hint">\u203b \uac00\uc0c1 \uc5b4\ub311\ud130(VMware\u00b7VirtualBox\u00b7WSL\u00b7VPN) \ubc0f 169.254.x.x \uc8fc\uc18c\ub294 \uc81c\uc678\ud558\uace0, \uc0ac\ub0b4 \uace0\uc815IP \ub300\uc5ed \uc8fc\uc18c\ub9cc \uc785\ub825\ud574 \uc8fc\uc138\uc694.</p>';
+    }
+    h+='</div>';
   });
   h+='<button class="addpc" onclick="addPc()">+ PC \ucd94\uac00 (\uc5ec\ub7ec \ub300 \uc0ac\uc6a9 \uc2dc) Add PC</button>'
     +'<p class="hint" style="margin-top:12px">PC\ub97c \uc5ec\ub7ec \ub300 \uc0ac\uc6a9\ud558\uc2dc\ub294 \uacbd\uc6b0 \ub2e8\ub9d0\ubcc4\ub85c \ubaa8\ub450 \ucd94\uac00\ud574 \uc8fc\uc138\uc694.</p>'
@@ -324,17 +345,18 @@ function adminHtml(){
   if(rows.length){
     h+='<h2 style="margin-top:24px"><span class="dot"></span>\uc0c1\uc138 \ub0b4\uc5ed Details (\uc2e0\uccad\uc11c \ucca8\ubd80\uc6a9)</h2>'
       +'<div style="overflow-x:auto"><table><thead><tr>'
-      +'<th>\ubd80\uc11c</th><th>\uc131\uba85</th><th>IP\uc8fc\uc18c</th><th>PC Hostname</th><th>\uc0ac\ubc88</th>'
+      +'<th>\ubd80\uc11c</th><th>\uc131\uba85</th><th>\uc5f0\uacb0\ubc29\uc2dd</th><th>\uc720\uc120 IP</th><th>\ubb34\uc120 IP</th><th>PC Hostname</th><th>\uc0ac\ubc88</th>'
       +'</tr></thead><tbody>';
     rows.forEach(function(r){
-      const pcs=(r.pcs&&r.pcs.length)?r.pcs:[{ip:"",host:""}];
+      const pcs=(r.pcs&&r.pcs.length)?r.pcs:[{conn:"",ipWired:"",ipWireless:"",host:""}];
       pcs.forEach(function(pc,i){
         h+='<tr><td>'+esc(i===0?(r.dept||teamOf(r.person)):"")+'</td><td><strong>'+esc(i===0?r.person:"")+'</strong></td>'
-          +'<td>'+esc(pc.ip)+'</td><td>'+esc(pc.host)+'</td><td>'+esc(i===0?r.empno:"")+'</td></tr>';
+          +'<td>'+esc(pc.conn||"")+'</td><td>'+esc(pc.ipWired||"")+'</td><td>'+esc(pc.ipWireless||"")+'</td>'
+          +'<td>'+esc(pc.host)+'</td><td>'+esc(i===0?r.empno:"")+'</td></tr>';
       });
     });
     h+='</tbody></table></div>'
-      +'<p class="hint">\u203b CSV \ub2e4\uc6b4\ub85c\ub4dc \ud6c4 \uc2e0\uccad\uc11c \uc591\uc2dd(\ubd80\uc11c/\uc131\uba85/IP\uc8fc\uc18c/PC Hostname/\uc0ac\ubc88)\uc5d0 \ubd99\uc5ec\ub123\uc73c\uc138\uc694.</p>';
+      +'<p class="hint">\u203b CSV \ub2e4\uc6b4\ub85c\ub4dc \ud6c4 \uc2e0\uccad\uc11c \uc591\uc2dd(\ubd80\uc11c/\uc131\uba85/\uc5f0\uacb0\ubc29\uc2dd/\uc720\uc120 IP/\ubb34\uc120 IP/PC Hostname/\uc0ac\ubc88)\uc5d0 \ubd99\uc5ec\ub123\uc73c\uc138\uc694.</p>';
   }
   h+='</div>';
   return h;
@@ -348,6 +370,7 @@ window.onPerson=function(v){
 };
 window.setVal=function(k,v){ state.form[k]=v; };
 window.setPc=function(idx,k,v){ if(state.form.pcs[idx]) state.form.pcs[idx][k]=v; };
+window.setConn=function(idx,v){ if(state.form.pcs[idx]){ state.form.pcs[idx].conn=v; render(); } };
 window.addPc=function(){ state.form.pcs.push(blankPc()); render(); };
 window.delPc=function(idx){ state.form.pcs.splice(idx,1); if(!state.form.pcs.length) state.form.pcs.push(blankPc()); render(); };
 window.resetForm=function(){ state.done=false; state.form=blankForm(); state.err=""; render(); };
@@ -361,11 +384,16 @@ window.submitForm=async function(){
   if(!f.person){ state.err="\uc131\uba85\uc744 \uc120\ud0dd\ud574\uc8fc\uc138\uc694 / Please select your name."; render(); return; }
   if(!f.dept){ state.err="\ubd80\uc11c\ub97c \uc785\ub825\ud574\uc8fc\uc138\uc694 / Please enter your department."; render(); return; }
   if(!f.empno){ state.err="\uc0ac\ubc88\uc744 \uc785\ub825\ud574\uc8fc\uc138\uc694 / Please enter your employee number."; render(); return; }
-  const validPcs=f.pcs.filter(function(p){ return (p.ip&&p.ip.trim())||(p.host&&p.host.trim()); });
-  if(!validPcs.length){ state.err="\ucd5c\uc18c 1\ub300\uc758 IP\uc8fc\uc18c\uc640 PC Hostname\uc744 \uc785\ub825\ud574\uc8fc\uc138\uc694 / Enter at least one device."; render(); return; }
+  const validPcs=f.pcs.filter(function(p){ return (p.ipWired&&p.ipWired.trim())||(p.ipWireless&&p.ipWireless.trim())||(p.host&&p.host.trim()); });
+  if(!validPcs.length){ state.err="\ucd5c\uc18c 1\ub300\uc758 \ub2e8\ub9d0 \uc815\ubcf4\ub97c \uc785\ub825\ud574\uc8fc\uc138\uc694 / Enter at least one device."; render(); return; }
   for(let i=0;i<validPcs.length;i++){
-    if(!validPcs[i].ip||!validPcs[i].ip.trim()){ state.err="PC \uc815\ubcf4\uc758 IP\uc8fc\uc18c\ub97c \ubaa8\ub450 \uc785\ub825\ud574\uc8fc\uc138\uc694 / IP address required for each PC."; render(); return; }
-    if(!validPcs[i].host||!validPcs[i].host.trim()){ state.err="PC \uc815\ubcf4\uc758 Hostname\uc744 \ubaa8\ub450 \uc785\ub825\ud574\uc8fc\uc138\uc694 / Hostname required for each PC."; render(); return; }
+    const p=validPcs[i];
+    if(!p.conn){ state.err="PC "+(i+1)+"\uc758 \uc5f0\uacb0 \ubc29\uc2dd(\uc720\uc120/\ubb34\uc120/\ub458 \ub2e4)\uc744 \uc120\ud0dd\ud574\uc8fc\uc138\uc694 / Select connection type."; render(); return; }
+    const needWired=(p.conn==="\uc720\uc120\ub9cc"||p.conn==="\ub458 \ub2e4");
+    const needWireless=(p.conn==="\ubb34\uc120\ub9cc"||p.conn==="\ub458 \ub2e4");
+    if(needWired && !(p.ipWired&&p.ipWired.trim())){ state.err="PC "+(i+1)+"\uc758 \uc774\ub354\ub137(\uc720\uc120) IPv4\ub97c \uc785\ub825\ud574\uc8fc\uc138\uc694 / Ethernet IPv4 required."; render(); return; }
+    if(needWireless && !(p.ipWireless&&p.ipWireless.trim())){ state.err="PC "+(i+1)+"\uc758 \ubb34\uc120 LAN(\ubb34\uc120) IPv4\ub97c \uc785\ub825\ud574\uc8fc\uc138\uc694 / Wireless IPv4 required."; render(); return; }
+    if(!(p.host&&p.host.trim())){ state.err="PC "+(i+1)+"\uc758 Hostname\uc744 \uc785\ub825\ud574\uc8fc\uc138\uc694 / Hostname required."; render(); return; }
   }
 
   state.err=""; state.submitting=true; render();
@@ -397,12 +425,12 @@ window.loadRows=async function(){
 
 window.exportCsv=function(){
   const rows=state.rows||[]; if(!rows.length){ alert("\ub2e4\uc6b4\ub85c\ub4dc\ud560 \uc81c\ucd9c \ub0b4\uc5ed\uc774 \uc5c6\uc2b5\ub2c8\ub2e4."); return; }
-  const head=["\ubd80\uc11c","\uc131\uba85","\uc9c1\uae09","\uc774\uba54\uc77c","\uc0ac\ubc88","IP\uc8fc\uc18c","PC Hostname","\uc81c\ucd9c\uc2dc\uac01"].join(",");
+  const head=["\ubd80\uc11c","\uc131\uba85","\uc9c1\uae09","\uc774\uba54\uc77c","\uc0ac\ubc88","\uc5f0\uacb0\ubc29\uc2dd","\uc720\uc120 IP","\ubb34\uc120 IP","PC Hostname","\uc81c\ucd9c\uc2dc\uac01"].join(",");
   const lines=[];
   rows.forEach(function(r){
-    const pcs=(r.pcs&&r.pcs.length)?r.pcs:[{ip:"",host:""}];
+    const pcs=(r.pcs&&r.pcs.length)?r.pcs:[{conn:"",ipWired:"",ipWireless:"",host:""}];
     pcs.forEach(function(pc){
-      const vals=[ r.dept||teamOf(r.person), r.person, roleOf(r.person), emailOf(r.person), r.empno||"", pc.ip||"", pc.host||"", r.submittedAt||"" ];
+      const vals=[ r.dept||teamOf(r.person), r.person, roleOf(r.person), emailOf(r.person), r.empno||"", pc.conn||"", pc.ipWired||"", pc.ipWireless||"", pc.host||"", r.submittedAt||"" ];
       lines.push(vals.map(function(v){ return '"'+String(v||"").replace(/"/g,'""')+'"'; }).join(","));
     });
   });
